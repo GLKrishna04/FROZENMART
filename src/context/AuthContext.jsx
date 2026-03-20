@@ -37,65 +37,64 @@ export function AuthProvider({ children }) {
     return { success: true, message: 'OTP sent successfully' }
   }
 
-  async function verifyOTP(phone, enteredOtp) {
-    const stored = localStorage.getItem('frozenmart_otp')
-    if (!stored) return { success: false, message: 'OTP expired' }
+ async function verifyOTP(phone, enteredOtp) {
+  const stored = localStorage.getItem('frozenmart_otp')
+  if (!stored) return { success: false, message: 'OTP expired' }
 
-    const { phone: storedPhone, otp, time } = JSON.parse(stored)
-    if (Date.now() - time > 5 * 60 * 1000) return { success: false, message: 'OTP expired' }
-    if (storedPhone !== phone || otp !== enteredOtp) return { success: false, message: 'Wrong OTP' }
+  const { phone: storedPhone, otp, time } = JSON.parse(stored)
+  if (Date.now() - time > 5 * 60 * 1000) return { success: false, message: 'OTP expired' }
+  if (storedPhone !== phone || otp !== enteredOtp) return { success: false, message: 'Wrong OTP' }
 
-    // Check if admin
-    const adminPhone = import.meta.env.VITE_ADMIN_PHONE
-    if (phone === adminPhone) {
-      const adminUser = { phone, role: 'admin', name: 'Admin' }
-      setUser(adminUser)
-      setRole('admin')
-      localStorage.setItem('frozenmart_user', JSON.stringify(adminUser))
-      localStorage.removeItem('frozenmart_otp')
-      return { success: true, role: 'admin' }
-    }
-
-    // Check if supplier
-    const { data: supplier } = await supabase
-      .from('suppliers')
-      .select('*')
-      .eq('phone', phone)
-      .eq('status', 'approved')
-      .single()
-
-    if (supplier) {
-      const supplierUser = { ...supplier, role: 'supplier' }
-      setUser(supplierUser)
-      setRole('supplier')
-      localStorage.setItem('frozenmart_user', JSON.stringify(supplierUser))
-      localStorage.removeItem('frozenmart_otp')
-      return { success: true, role: 'supplier' }
-    }
-
-    // Customer login/register
-    let { data: customer } = await supabase
-      .from('users')
-      .select('*')
-      .eq('phone', phone)
-      .single()
-
-    if (!customer) {
-      const { data: newCustomer } = await supabase
-        .from('users')
-        .insert({ phone, role: 'customer' })
-        .select()
-        .single()
-      customer = newCustomer
-    }
-
-    const customerUser = { ...customer, role: 'customer' }
-    setUser(customerUser)
-    setRole('customer')
-    localStorage.setItem('frozenmart_user', JSON.stringify(customerUser))
+  // Check if admin
+  const adminPhone = import.meta.env.VITE_ADMIN_PHONE
+  if (phone === adminPhone) {
+    const adminUser = { phone, role: 'admin', name: 'Admin' }
+    setUser(adminUser)
+    setRole('admin')
+    localStorage.setItem('frozenmart_user', JSON.stringify(adminUser))
     localStorage.removeItem('frozenmart_otp')
-    return { success: true, role: 'customer' }
+    return { success: true, role: 'admin' }
   }
+
+  // Check if approved supplier
+  const { data: supplierData } = await supabase
+    .from('suppliers')
+    .select('*')
+    .eq('phone', phone)
+    .eq('status', 'approved')
+
+  if (supplierData && supplierData.length > 0) {
+    const supplierUser = { ...supplierData[0], role: 'supplier' }
+    setUser(supplierUser)
+    setRole('supplier')
+    localStorage.setItem('frozenmart_user', JSON.stringify(supplierUser))
+    localStorage.removeItem('frozenmart_otp')
+    return { success: true, role: 'supplier' }
+  }
+
+  // Customer login/register
+  const { data: customerData } = await supabase
+    .from('users')
+    .select('*')
+    .eq('phone', phone)
+
+  let customer = customerData && customerData.length > 0 ? customerData[0] : null
+
+  if (!customer) {
+    const { data: newCustomer } = await supabase
+      .from('users')
+      .insert({ phone, role: 'customer' })
+      .select()
+    customer = newCustomer && newCustomer.length > 0 ? newCustomer[0] : { phone, role: 'customer' }
+  }
+
+  const customerUser = { ...customer, role: 'customer' }
+  setUser(customerUser)
+  setRole('customer')
+  localStorage.setItem('frozenmart_user', JSON.stringify(customerUser))
+  localStorage.removeItem('frozenmart_otp')
+  return { success: true, role: 'customer' }
+}
 
   function logout() {
     setUser(null)
